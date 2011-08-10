@@ -71,7 +71,11 @@ def main():
     if options.commit:
         commit = repo.commit(options.commit)
     tree   = commit.tree
-    ftp    = ftplib.FTP(options.ftp.hostname, options.ftp.username, options.ftp.password)
+    if (options.ftp.ssl and sys.version_info>(2,7,0)): #ssl new in 2.7+
+        ftp = ftplib.FTP_TLS(options.ftp.hostname, options.ftp.username, options.ftp.password)
+        ftp.prot_p()
+    else:
+        ftp = ftplib.FTP(options.ftp.hostname, options.ftp.username, options.ftp.password)
     ftp.cwd(base)
 
     # Check revision
@@ -146,6 +150,7 @@ class FtpData():
     username = None
     hostname = None
     remotepath = None
+    ssl = None
 
 def get_ftp_creds(repo, options):
     """
@@ -159,6 +164,7 @@ def get_ftp_creds(repo, options):
         password=s00perP4zzw0rd
         hostname=ftp.hostname.com
         remotepath=/htdocs
+        ssl=yes
 
     Please note that it isn't necessary to have this file,
     you'll be asked for the data every time you upload something.
@@ -184,11 +190,19 @@ def get_ftp_creds(repo, options):
         options.ftp.username = cfg.get(options.branch,'username')
         options.ftp.hostname = cfg.get(options.branch,'hostname')
         options.ftp.remotepath = cfg.get(options.branch,'remotepath')
+        try:
+            if cfg.get(options.branch,'ssl') in ('1','true','y','yes'):
+                options.ftp.ssl = True
+            else:
+                options.ftp.ssl = False
+        except ConfigParser.NoOptionError:
+            options.ftp.ssl = False           
     else:
         options.ftp.username = raw_input('FTP Username: ')
         options.ftp.password = getpass.getpass('FTP Password: ')
         options.ftp.hostname = raw_input('FTP Hostname: ')
         options.ftp.remotepath = raw_input('Remote Path: ')
+        options.ftp.ssl = raw_input('SSL (y/n): ')
 
         # set default branch
         if ask_ok("Should I write ftp details to .git/ftpdata? "):
@@ -197,6 +211,7 @@ def get_ftp_creds(repo, options):
             cfg.set(options.branch, 'password', options.ftp.password)
             cfg.set(options.branch, 'hostname', options.ftp.hostname)
             cfg.set(options.branch, 'remotepath', options.ftp.remotepath)
+            cfg.set(options.branch, 'ssl', options.ftp.ssl)
             f = open(ftpdata, 'w')
             cfg.write(f)
 
